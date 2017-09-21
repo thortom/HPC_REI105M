@@ -3,6 +3,12 @@
 !/**/
 !*.*
 
+# Latex build files
+*.aux
+*.log
+*.pdf
+*.synctex.gz
+
 # Prerequisites
 *.d
 
