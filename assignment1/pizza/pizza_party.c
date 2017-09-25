@@ -4,32 +4,13 @@
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
-#include "person.h"
-#include "bool.h"
-/*
-typedef int Gender;
-#define male 1
-#define female 2
-*/
-/*
-typedef int bool;
-#define true 1
-#define false 0
-*/
+#include "person.h" /*include person struct*/
+#include "bool.h" /* include bool functions*/
+
 /* global variable declaration */
 int action_time = 1000 * 1000;  /* One second*/
 
-/* TODO: Move Person in to separate file */
-/*
-typedef struct PersonIdentity {
-    int rank;
-    Gender gender;
-    int group_rank;
-    int pepperoni;
-    int pizza_size;
-    int is_window_open;
-} Person;
-*/
+
 void Person_constructor(Person *me, int rank, int gender,
                             int group_rank) {
     me->rank = rank;
@@ -110,24 +91,7 @@ void print_info(Person *me) {
     printf("    My pizza is %d bites\n", me->pizza_size);
 }
 
-/* TODO: Maybe move these global functions in to separate file as well*/
-/*
-bool random_bool() {
-    return rand() % 2;
-}
 
-bool is_hot() {
-    return random_bool();
-}
-
-bool is_cold() {
-    return random_bool();
-}
-
-bool phone_is_rinnging() {
-    return random_bool();
-}
-*/
 
 int main (int argc, char *argv[])
 {
