@@ -52,7 +52,7 @@
     \end{figure}
 
     \item
-    \textit{Scatter and gather program}
+    \textit{Scatter and gather program}\\
     The scatter gather program was structured so that node of rank 0 controls the data distribution. On startup an array is constructed $array = [0, 1, 2, ..., (N * 4) - 1]$ where N is the number of nodes. Then each node receives an array chunk of 4 elements with the scatter command. The node then computes the sum of it’s elements and reports them back with via the gather command. The rank 0 node computes the sum of the gathered sums and prints the result to the standard output.
     \begin{figure}[H]
         \centering
@@ -61,9 +61,13 @@
     \end{figure}
 
     \item
-    \textit{Parallel pizza MPI program}
+    \textit{Parallel pizza MPI program}\\
     % TODO: Upload the code to UGLA as a zipped file allong with the job script.
-    % Brod cast | 2 x communicatiors | MPI_Barrier to block them from going to early
+    % Broadcast | 2 x communicatiors | MPI_Barrier to block them from going to early
+    %10 Lines! you can fukken do this bitch! 
+    The Parallel pizza program is structured in three parts, \texttt{person.c} includes all "action" functions e.g. \texttt{take\_bite\_pizza} and \texttt{open\_window}. The second is \texttt{enviroment.c} contains bool functions regarding the temperature of the room or if the phone is ringing. Then there is \texttt{pizza\_party.c} where all the good stuff is happening. 
+    
+First we create a communicator with \texttt{MPI\_COMM\_WORLD} and then using \texttt{MPI\_Comm\_split} a second communicator is created and the "people" (nodes) are split into three groups, host in group 0, men in group 1 and women in group 2. The "person" that has rank 0 in each group is responsible for summing up the total number of pepperoni slices in it's group (\texttt{MPI\_Reduce}) and sending the sum (\texttt{MPI\_Send}) to the host. Now the host receives (\texttt{MPI\_Recv}) the pepperoni count from each room and sums it up and prints. While the party is still going i.e. the pizza is not finished, the host is checking if the room is hot and if he needs to open a window or answer the phone and the others wait for the host. Lastly \texttt{MPI\_Barrier(MPI\_COMM\_WORLD)} blocks all processes so no one can leave the party until everyone in the communicator has finished. 
 
     \end{enumerate}
 \end{enumerate}
