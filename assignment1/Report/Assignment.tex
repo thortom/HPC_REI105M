@@ -42,7 +42,7 @@
     \item
     \textit{Pingpong program sending ``12345''.}
     
-    The ping pong program needs to be scheduled on two nodes. The program initializes the MPI environment and gets assigned it's rank id $0$ or $1$ as well getting notified of the number of nodes running.
+    The ping pong program needs to be scheduled on two nodes. The program initializes the MPI environment and gets assigned it's rank id $0$ or $1$ and gets notified of number of nodes running.
 
     Then depending on whether the node running the program is rank $0$ or $1$ it starts by either sending the message (ping) $int outmsg=12345$, if rank $0$ and if rank $1$ then it goes straight into waiting for a message with MPI\_Recv. After successful message transfer node $1$ proceeds to sending the same message back (pong) and node $0$ proceeds to waiting for the message. Once the message has been successfully transfered both nodes proceed to printing there debug message and then exit after MPI\_Finilize call.
     \begin{figure}[H]
@@ -53,7 +53,7 @@
 
     \item
     \textit{Scatter and gather program}\\
-    The scatter gather program was structured so that node of rank 0 controls the data distribution. On startup an array is constructed $array = [0, 1, 2, ..., (N * 4) - 1]$ where N is the number of nodes. Then each node receives an array chunk of 4 elements with the scatter command. The node then computes the sum of it’s elements and reports them back with via the gather command. The rank 0 node computes the sum of the gathered sums and prints the result to the standard output.
+    The scatter gather program was structured so that node of rank 0 controls the data distribution. On startup an array is constructed $array = [0, 1, 2, ..., (N * 4) - 1]$ where N is the number of nodes. Then each node receives an array chunk of 4 elements with the scatter command. The node then computes the sum of it’s elements and reports them back via the gather command. The rank 0 node computes the sum of the gathered sums and prints the result to the standard output.
     \begin{figure}[H]
         \centering
         \includegraphics[scale=0.8]{Images/ScatterGather}

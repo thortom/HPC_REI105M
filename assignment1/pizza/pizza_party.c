@@ -22,7 +22,7 @@ int main (int argc, char *argv[])
     }
     else {
         /* This maps world_rank 1 as the first in group 1 */
-        /* and world_rank 2 as the fist in group 2 */
+        /* and world_rank 2 as the first in group 2 */
         group = (world_rank % 2) + 1;
     }
 
