@@ -1,10 +1,35 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-#include <math.h>
 #include <time.h>
 #include <unistd.h>
-#include <string.h>
+
+/* logger.h */
+/* Global start time */
+double START_TIME;
+
+void init_logger();
+double get_current_time();
+
+/* End logger.h */
+
+/* logger.c */
+/* log_info macro */
+#define log_info(format, ...) printf("%f sec [%s:%d] " format "\n", (get_current_time() - START_TIME), __FILE__, __LINE__, ## __VA_ARGS__)
+#define log_debug(format, ...) log_info("DEBUG\n" format "")
+
+void init_logger()
+{
+    /* Setting the start time for this program */
+    START_TIME = get_current_time();
+}
+
+double get_current_time()
+{
+    return MPI_Wtime();
+}
+
+/* End logger.c */
 
 /* Elevator.h */
 #define N_DATA_ITEMS 3
@@ -18,25 +43,72 @@ typedef struct ElevatorIdentity {
     int numb_persons;
 } Elevator;
 
-struct ElevatorDataIdentity 
+typedef struct ElevatorDataIdentity 
 {
-    int size;
-    int null_data[N_DATA_ITEMS];
-    int shutdown_signal[N_DATA_ITEMS];
     int person_rank;
     int from;
     int to;
-} ElevatorData_default = {N_DATA_ITEMS, {999, 999, 999}, {-1, -1, -1}, 0, 1, 2};
-typedef struct ElevatorDataIdentity ElevatorData;
+} ElevatorData;
 
+/* Global variables */
+ElevatorData ELEVATOR_NULL_DATA;
+ElevatorData ELEVATOR_SHUTDOWN_SIGNAL;
+MPI_Datatype mpi_elevator_data_type;
+
+void init_elevator_data();
+void elevator_data_free();
 void Elevator_constructor(Elevator *me, int rank, int numb_persons);
+void print_elevator_data(ElevatorData data);
 void print_elevator(Elevator *me);
 void start(Elevator *me);
 
 /* Elevator.h Ends */
 
 /* Elevator.c */
-void Elevator_constructor(Elevator *me, int rank, int numb_persons) {
+void init_elevator_data()
+{
+    /* create a type for struct ElevatorData */
+    const int nitems=3;
+    int          blocklengths[3] = {1, 1, 1};
+    MPI_Datatype types[3] = {MPI_INT, MPI_INT, MPI_INT};
+    MPI_Aint     offsets[3];
+
+    offsets[0] = offsetof(ElevatorData, person_rank);
+    offsets[1] = offsetof(ElevatorData, from);
+    offsets[2] = offsetof(ElevatorData, to);
+
+    MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_elevator_data_type);
+    MPI_Type_commit(&mpi_elevator_data_type);
+
+    ELEVATOR_NULL_DATA.person_rank = -999;
+    ELEVATOR_NULL_DATA.from = -999;
+    ELEVATOR_NULL_DATA.to = -999;
+    ELEVATOR_SHUTDOWN_SIGNAL.person_rank = -1;
+    ELEVATOR_SHUTDOWN_SIGNAL.from = -1;
+    ELEVATOR_SHUTDOWN_SIGNAL.to = -1;
+}
+
+void elevator_data_free()
+{
+    MPI_Type_free(&mpi_elevator_data_type);
+}
+
+int elevator_data_equal(ElevatorData data_1, ElevatorData data_2)
+{
+    if (data_1.person_rank == data_2.person_rank &&
+        data_1.from == data_2.from &&
+        data_1.to == data_2.to)
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+void Elevator_constructor(Elevator *me, int rank, int numb_persons)
+{
     me->rank = rank;
     me->current_level = 0;
     me->is_running = 1;
@@ -46,36 +118,31 @@ void Elevator_constructor(Elevator *me, int rank, int numb_persons) {
     me->numb_persons = numb_persons;
 }
 
-void print_elevator(Elevator *me)
+void print_elevator_data(ElevatorData data)
 {
-    printf("Elevator:,\n\
-        Rank: %d,\n\
-        Current Level: %d\n", me->rank, me->current_level);
+    log_info("person_rank: %d, from: %d, to: %d", data.person_rank, data.from, data.to);
 }
 
-/* TODO: Fix this function it's flakey ... */
+void print_elevator(Elevator *me)
+{
+    log_info("Elevator:, Rank: %d, Current Level: %d", me->rank, me->current_level);
+}
+
 void start(Elevator *me)
 {
     MPI_Status status;
-    int i, j, tag = 1, flag = 0;
-    int diff, travel_time, one_level_travel_time = 1;
-    ElevatorData transfer_data = ElevatorData_default;
-    int data[transfer_data.size];
-    for (i = 0; i < transfer_data.size; i++)
-    {
-        data[i] = transfer_data.null_data[i];
-    }
-    int persons_to_transfer[6] = {0, 0, 0, 0, 0, 0};
+    int i, j, n, tag = 1, flag = 0;
+    int travel_time, one_level_travel_time = 1;
+    ElevatorData data = ELEVATOR_NULL_DATA;
+
+    ElevatorData persons_to_transfer[2] = {ELEVATOR_NULL_DATA, ELEVATOR_NULL_DATA};
 
     int numb_requests = 0;
-    int *incomming_requests = (int*) malloc(me->numb_persons * transfer_data.size * sizeof(int));
+    ElevatorData *incomming_requests = (ElevatorData*) malloc(me->numb_persons * sizeof(ElevatorData));
     for (i = 0; i <  me->numb_persons; i++)
     {
-        for (j = 0; j < transfer_data.size; j++)
-        {
-            *(incomming_requests + (i * transfer_data.size) + j) = 0;
-        }
-    }
+        *(incomming_requests + i) = ELEVATOR_NULL_DATA;
+    }  
 
     while (me->is_running)
     {
@@ -86,22 +153,22 @@ void start(Elevator *me)
 
             if (flag == 1)
             {
-                MPI_Recv(&data, 3, MPI_INT, i, tag, MPI_COMM_WORLD, &status);
+                MPI_Recv(&data, 1, mpi_elevator_data_type, i, tag, MPI_COMM_WORLD, &status);
 
-                diff = memcmp(data, transfer_data.shutdown_signal, transfer_data.size);
-                if (diff == 0)
+                if (elevator_data_equal(data, ELEVATOR_SHUTDOWN_SIGNAL))
                 {
                     me->is_running = 0;
-                    printf("The elevator is shutting down\n");
+                    log_info("The elevator is shutting down");
                     break;
                 }
-                else if (memcmp(data, transfer_data.null_data, transfer_data.size) != 0)
+                else if (!elevator_data_equal(data, ELEVATOR_NULL_DATA))
                 {
+                    /* TODO: Ensure that the ELEVATOR_NULL_DATA does not change here */
                     /* Collect all passenger requests here*/
-                    printf("Collecting passenger request for rank %d\n", data[transfer_data.person_rank]);
-                    *(incomming_requests + ((i - 1) * transfer_data.size) + transfer_data.person_rank) = data[transfer_data.person_rank];
-                    *(incomming_requests + ((i - 1) * transfer_data.size) + transfer_data.from) = data[transfer_data.from];
-                    *(incomming_requests + ((i - 1) * transfer_data.size) + transfer_data.to) = data[transfer_data.to];
+                    log_info("Collecting passenger request for rank %d", data.person_rank);
+                    (*(incomming_requests + (i - 1))).person_rank = data.person_rank;
+                    (*(incomming_requests + (i - 1))).from = data.from;
+                    (*(incomming_requests + (i - 1))).to = data.to;
                     numb_requests = numb_requests + 1;
                 }
             }
@@ -112,65 +179,61 @@ void start(Elevator *me)
         {
             for (i = 0; i < me->numb_persons; i++)
             {
-                /* No person is rank 0 */
-                if (*(incomming_requests + (i * transfer_data.size) + transfer_data.person_rank))
+                if (!elevator_data_equal(*(incomming_requests + i), ELEVATOR_NULL_DATA))
                 {
-                    if (persons_to_transfer[0] == 0)
+                    if (elevator_data_equal(persons_to_transfer[0], ELEVATOR_NULL_DATA))
                     {
-                        persons_to_transfer[transfer_data.person_rank] = \
-                            *(incomming_requests + (i * transfer_data.size) + transfer_data.person_rank);
-                        persons_to_transfer[transfer_data.from] = \
-                            *(incomming_requests + (i * transfer_data.size) + transfer_data.from);
-                        persons_to_transfer[transfer_data.to] = \
-                            *(incomming_requests + (i * transfer_data.size) + transfer_data.to);
+                        (persons_to_transfer[0]).person_rank = (*(incomming_requests + i)).person_rank;
+                        (persons_to_transfer[0]).from = (*(incomming_requests + i)).from;
+                        (persons_to_transfer[0]).to = (*(incomming_requests + i)).to;
 
-                        *(incomming_requests + (i * transfer_data.size) + transfer_data.person_rank) = 0;
+                        *(incomming_requests + i) = ELEVATOR_NULL_DATA;
                         numb_requests = numb_requests - 1;
-                        printf("person to transfer=%d from=%d, to=%d\n", persons_to_transfer[transfer_data.person_rank],
-                                                    persons_to_transfer[transfer_data.from], persons_to_transfer[transfer_data.to]);
-                    }
-                    else if ((persons_to_transfer[1 * transfer_data.size] == 0) && (*(incomming_requests + (i * transfer_data.size) + transfer_data.from) == persons_to_transfer[transfer_data.from]))
-                    {
-                        persons_to_transfer[transfer_data.size + transfer_data.person_rank] = \
-                            *(incomming_requests + (i * transfer_data.size) + transfer_data.person_rank);
-                        persons_to_transfer[transfer_data.size + transfer_data.from] = \
-                            *(incomming_requests + (i * transfer_data.size) + transfer_data.from);
-                        persons_to_transfer[transfer_data.size + transfer_data.to] = \
-                            *(incomming_requests + (i * transfer_data.size) + transfer_data.to);
 
-                        *(incomming_requests + (i * transfer_data.size) + transfer_data.person_rank) = 0;
+                        log_info("person to transfer");
+                        print_elevator_data(persons_to_transfer[0]);
+                    }
+                    else if (elevator_data_equal(persons_to_transfer[1], ELEVATOR_NULL_DATA) &&
+                                ((*(incomming_requests + i)).from == persons_to_transfer[0].from))
+                    {
+                        (persons_to_transfer[1]).person_rank = (*(incomming_requests + i)).person_rank;
+                        (persons_to_transfer[1]).from = (*(incomming_requests + i)).from;
+                        (persons_to_transfer[1]).to = (*(incomming_requests + i)).to;
+
+                        *(incomming_requests + i) = ELEVATOR_NULL_DATA;
                         numb_requests = numb_requests - 1;
-                    }
 
-                    /* Two persons to collect or only one to collect on the specific level */
-                    printf("persons_to_transfer[(1 * transfer_data.size) + transfer_data.person_rank] ->%d\ni -> %d (me->numb_persons - 1) ->%d\n",
-                                persons_to_transfer[(1 * transfer_data.size) + transfer_data.person_rank], i, (me->numb_persons - 1));
-                    if ((persons_to_transfer[(1 * transfer_data.size) + transfer_data.person_rank] != 0) || (i == (me->numb_persons - 1)))
-                    {
-                        if (persons_to_transfer[(1 * transfer_data.size) + transfer_data.person_rank] != 0)
-                        {
-                            printf("Picking up persons of rank %d and %d on level=%d\n", persons_to_transfer[transfer_data.person_rank],
-                                                                            persons_to_transfer[(1 * transfer_data.size) + transfer_data.person_rank],
-                                                                            persons_to_transfer[transfer_data.from]);
-                        }
-                        else
-                        {
-                            printf("Picking up person of rank %d on level=%d\n", persons_to_transfer[transfer_data.person_rank], persons_to_transfer[transfer_data.from]);
-                        }
-                        for (i = 0; i < 2; i++)
-                        {
-                            if (persons_to_transfer[(i * transfer_data.size) + transfer_data.person_rank])
-                            {
-                                printf("Sending the travel_time to rank=%d\n", persons_to_transfer[(i * transfer_data.size) + transfer_data.person_rank]);
-                                travel_time = abs(persons_to_transfer[transfer_data.to] - persons_to_transfer[transfer_data.from]) * one_level_travel_time;
-                                MPI_Send(&travel_time, 1, MPI_INT, persons_to_transfer[(i * transfer_data.size) + transfer_data.person_rank], tag, MPI_COMM_WORLD);
-                            }
-                        }
-                        for (j = 0; j < (2 * transfer_data.size); j++)
-                        {
-                            persons_to_transfer[j] = 0;
-                        }
+                        log_info("second person to transfer");
+                        print_elevator_data(persons_to_transfer[1]);
                     }
+                }
+
+                /* Two persons to collect or only one to collect on the specific level */
+                if (!elevator_data_equal(persons_to_transfer[1], ELEVATOR_NULL_DATA) || (i == (me->numb_persons - 1)))
+                {
+                    if (!elevator_data_equal(persons_to_transfer[1], ELEVATOR_NULL_DATA))
+                    {
+                        log_info("Picking up two persons");
+                        print_elevator_data(persons_to_transfer[0]);
+                        log_info("    and");
+                        print_elevator_data(persons_to_transfer[1]);
+                        n = 2;
+                    }
+                    else if (!elevator_data_equal(persons_to_transfer[0], ELEVATOR_NULL_DATA))
+                    {
+                        log_info("Picking up one person");
+                        print_elevator_data(persons_to_transfer[0]);
+                        n = 1;
+                    }
+                    for (j = 0; j < n; j++)
+                    {
+                        log_debug("j=%d, n=%d", j, n);
+                        log_info("Sending the travel_time to rank=%d", persons_to_transfer[j].person_rank);
+                        travel_time = abs(persons_to_transfer[j].to - persons_to_transfer[j].from) * one_level_travel_time;
+                        MPI_Send(&travel_time, 1, MPI_INT, persons_to_transfer[j].person_rank, tag, MPI_COMM_WORLD);
+                        persons_to_transfer[j] = ELEVATOR_NULL_DATA;
+                    }
+                    n = 0;
                 }
             }
         }
@@ -178,6 +241,7 @@ void start(Elevator *me)
 
     /* Releasing dynamically allocated memory */
     free(incomming_requests);
+    elevator_data_free();
 }
 
 /* Elevator.c Ends */
@@ -206,45 +270,39 @@ void Person_constructor(Person *me, int rank, char* name) {
 
 void print_person(Person *me)
 {
-    printf("Person: %s,\n\
-        Rank: %d,\n\
-        Work Level: %d\n", me->name, me->rank, me->work_level);
+    log_info("Person: %s, Rank: %d, Work Level: %d", me->name, me->rank, me->work_level);
 }
 
 int going_to_work(Person *me)
 {
-    printf("%s going to work\n", me->name);
+    log_info("%s going to work", me->name);
     return me->work_level;
 }
 
 int going_home(Person *me)
 {
-    printf("%s going home\n", me->name);
+    log_info("%s going home", me->name);
     return me->work_level;
 }
 
 void browsing_phone(Person *me)
 {
-    printf("%s I'm browsing my phone\n", me->name);
+    log_info("%s I'm browsing my phone", me->name);
     sleep(1);
 }
 
 void request_elevator(Person *me, int from, int to, int elevator_rank)
 {
-    printf("%s is requesting the elevator...\n", me->name);
+    log_info("%s is requesting the elevator...", me->name);
 
     MPI_Status status;
     MPI_Request request;
     int tag = 1;
 
-    ElevatorData transfer_data = ElevatorData_default;
-    int data[transfer_data.size];
-    data[transfer_data.person_rank] = me->rank;
-    data[transfer_data.from] = from;
-    data[transfer_data.to] = to;
+    ElevatorData data = {me->rank, from, to};
 
     /* Send the transfer data to the elevator */
-    MPI_Isend(&data, transfer_data.size, MPI_INT, elevator_rank, tag, MPI_COMM_WORLD, &request);
+    MPI_Isend(&data, 1, mpi_elevator_data_type, elevator_rank, tag, MPI_COMM_WORLD, &request);
 
     int flag = 0;
     while (!flag)
@@ -253,7 +311,8 @@ void request_elevator(Person *me, int from, int to, int elevator_rank)
         MPI_Test(&request, &flag, &status);
         browsing_phone(me);
     }
-    printf("%s the elevator is coming soon for me\n", me->name);
+    log_info("%s I'm going from: %d, to to: %d", me->name, from, to);
+    log_info("%s the elevator is coming soon for me", me->name);
 
     int travel_time;
     MPI_Irecv(&travel_time, 1, MPI_INT, elevator_rank, tag, MPI_COMM_WORLD, &request);
@@ -265,25 +324,18 @@ void request_elevator(Person *me, int from, int to, int elevator_rank)
         browsing_phone(me);
     }
 
-    printf("%s the elevator has arrived for me\n", me->name);
+    log_info("%s the elevator has arrived for me", me->name);
     sleep(travel_time);
-    printf("%s arrived at my level\n", me->name);
+    log_info("%s arrived at my level", me->name);
 }
 
 void shutdown_the_elevator(Person *me, int elevator_rank)
 {
-    ElevatorData transfer_data = ElevatorData_default;
     int tag = 1;
-    printf("%s is shutting down the elevator\n", me->name);
-    MPI_Send(&transfer_data.shutdown_signal, 3, MPI_INT, elevator_rank, tag, MPI_COMM_WORLD);
+    log_info("%s is shutting down the elevator", me->name);
+    MPI_Send(&ELEVATOR_SHUTDOWN_SIGNAL, 1, mpi_elevator_data_type, elevator_rank, tag, MPI_COMM_WORLD);
 }
 /* Person.c Ends */
-
-/* Global start time */
-double START_TIME;
-
-/* log_info macro */
-#define log_info(format, ...) printf("%f sec [%s:%d] " format "\n", (MPI_Wtime() - START_TIME), __FILE__, __LINE__, ## __VA_ARGS__)
 
 char * person_names[] = {
     "Noah",
@@ -297,10 +349,7 @@ char * person_names[] = {
 
 int main (int argc, char *argv[])
 {
-    /* Setting the global start time */
-    START_TIME = MPI_Wtime();
-    log_info("Logging stuff");
-    return 0;
+    init_logger();
 
     /* This is a three level building with only the lobby on level 0
         and offices on levels 1, 2, 3 */
@@ -333,7 +382,9 @@ int main (int argc, char *argv[])
     int group_rank;
     MPI_Comm_rank(group_comm, &group_rank);
 
-
+    /* TODO: Maybe move this init to elevator.c (only run once)*/
+    /* Only one elevator instance allowed in program scope */
+    init_elevator_data();
     if (rank == elevator_rank)
     {
         Elevator me;
@@ -348,15 +399,15 @@ int main (int argc, char *argv[])
         Person_constructor(&me, rank, person_names[rank - 1]);
 
         print_person(&me);
-
+        
         int level;
         if (rank != elevator_rank)
         {
             level = going_to_work(&me);
             request_elevator(&me, 0, level, elevator_rank);
 
-            printf("Everybody working... working...\n");
-            sleep(10);
+            log_info("Everybody working... working...");
+            sleep(4);
         }
 
         if (rank != elevator_rank)
@@ -365,13 +416,14 @@ int main (int argc, char *argv[])
             request_elevator(&me, level, 0, elevator_rank);
         }
         
-        printf("%s is done working\n", me.name);
+        log_info("%s is done working", me.name);
         MPI_Barrier(group_comm);
-        sleep(5);
+
+        sleep(1);
         if (group_rank == 0)
         {
             shutdown_the_elevator(&me, elevator_rank);
-            printf("The office building is closed\n");
+            log_info("The office building is closed");
         }
     }
 

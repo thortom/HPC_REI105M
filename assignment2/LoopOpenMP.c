@@ -26,7 +26,7 @@ double time_elapsed()
 
 int main(int argc, char *argv[])
 {
-    /* Setting the global start time */
+    /* Setting the start time for this program */
     clock_gettime(CLOCK_MONOTONIC, &START_TIME);
 
     int bstart, bend, blen, numth, tid, i;
