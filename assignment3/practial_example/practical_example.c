@@ -22,7 +22,7 @@ int main (int argc, char** argv) {
 
 	MPI_Cart_coords(comm_2d, rank, 2, coords);
 
-	MPI_Cart_Shift(comm_2d, 0, 1, &source, &dest);
+	MPI_Cart_shift(comm_2d, 0, 1, &source, &dest);
 
 	a = rank; b = 100;
 
