@@ -35,12 +35,6 @@ int main (int argc, char** argv) {
 	MPI_Cart_shift(cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
 	MPI_Cart_shift(cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
 
-	printf("rank = %d, coords = %d %d having neighbours (u, d, l, r) = %d %d %d %d \n", rank, coords[0], coords[1], nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
-
-	/*Do some work with MPI communication operations...
-	  e.g. exchanging simple data with all neighbours*/
-	/*cell type is; 0: land, 1: water*/
-
 	char cell[5];
 	/*Ranks 0 to and including 3 get to be lands*/
 	if(rank < 4){ 
@@ -49,7 +43,17 @@ int main (int argc, char** argv) {
 	else{
 		cell = "Water";
 	}
-	printf("rank = %d, I am of type %s", rank, cell);	
+	printf("rank = %d, I am of type %s", rank, cell);
+
+	sleep(2)
+
+	printf("rank = %d, coords = %d %d having neighbours (u, d, l, r) = %d %d %d %d \n", rank, coords[0], coords[1], nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
+
+	/*Do some work with MPI communication operations...
+	  e.g. exchanging simple data with all neighbours*/
+	/*cell type is; 0: land, 1: water*/
+
+
 	outbuf = cell_type;
 	for(i = 0; i<4; i++){
 		dest=nbrs[i];
