@@ -35,16 +35,19 @@ int main (int argc, char** argv) {
 	MPI_Cart_shift(cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
 	MPI_Cart_shift(cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
 
+	int cell_type;
 	/*Ranks 0 to and including 3 get to be lands*/
 	if(rank < 4){ 
-		char cell[5] = "Lands";
+		char cell[] = "Lands";
+		cell_type = 0;
 	}
 	else{
-		char cell[5] = "Water";
+		char cell[] = "Water";
+		cell_type = 1;
 	}
 	printf("rank = %d, I am of type %s", rank, cell);
 
-	sleep(2)
+	sleep(2);
 
 	printf("rank = %d, coords = %d %d having neighbours (u, d, l, r) = %d %d %d %d \n", rank, coords[0], coords[1], nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
 
