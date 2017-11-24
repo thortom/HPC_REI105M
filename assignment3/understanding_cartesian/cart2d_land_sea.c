@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <stdlib.h>
+#include <unistd.h>
 /*Constants for numbers*/
 #define SIZE 16
 #define UP 0
@@ -38,16 +39,16 @@ int main (int argc, char** argv) {
 	int cell_type;
 	/*Ranks 0 to and including 3 get to be lands*/
 	if(rank < 4){ 
-		char cell[] = "Lands";
 		cell_type = 0;
+		printf("rank = %d, I am of type 0, land", rank);
 	}
 	else{
-		char cell[] = "Water";
 		cell_type = 1;
+		printf("rank = %d, I am of type 1, water", rank);
 	}
-	printf("rank = %d, I am of type %s", rank, cell);
+	
 
-	sleep(2);
+	sleep(1);
 
 	printf("rank = %d, coords = %d %d having neighbours (u, d, l, r) = %d %d %d %d \n", rank, coords[0], coords[1], nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
 
