@@ -41,6 +41,14 @@ int main (int argc, char** argv) {
 	  e.g. exchanging simple data with all neighbours*/
 	/*cell type is; 0: land, 1: water*/
 	int cell_type = rand() % 2;
+	char cell[5];
+	if(cell_type == 0){
+		cell = "Lands";
+	}
+	else{
+		cell = "Water";
+	}
+	printf("rank = %d, I am of type %s", rank, cell);	
 	outbuf = cell_type;
 	for(i = 0; i<4; i++){
 		dest=nbrs[i];
