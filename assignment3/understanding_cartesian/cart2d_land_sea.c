@@ -9,7 +9,7 @@
 #define RIGHT 3
 
 int main (int argc, char** argv) {
-	int numtasks, rank, source, dest, outbuf, i, tag=1;
+	int numtasks, rank, source, dest, outbuf, i, j, tag=1;
 	/* MPI_PROC_NULL indicates a 'rank' for a so-called 'dummy process' */
 	int inbuf[4] = {MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL}; /* Prepares variables to be used in async communication*/
 	int nbrs[4];
@@ -40,9 +40,10 @@ int main (int argc, char** argv) {
 	/*Do some work with MPI communication operations...
 	  e.g. exchanging simple data with all neighbours*/
 	/*cell type is; 0: land, 1: water*/
-	int cell_type = rand() % 2;
+
 	char cell[5];
-	if(cell_type == 0){
+	/*Ranks 0 to and including 3 get to be lands*/
+	if(rank < 4){ 
 		cell = "Lands";
 	}
 	else{
