@@ -15,6 +15,6 @@ double get_current_time();
 
 /* log_info macro */
 #define log_info(format, ...) printf("%f sec [%s:%d] " format "\n", (get_current_time() - START_TIME), __FILE__, __LINE__, ## __VA_ARGS__)
-#define log_debug(format, ...) log_info("DEBUG\n" format "")
+#define log_debug(format, ...) log_info("DEBUG: " format, ## __VA_ARGS__)
 
 #endif
