@@ -35,13 +35,12 @@ int main (int argc, char** argv) {
 	MPI_Cart_shift(cartcomm, 0, 1, &nbrs[UP], &nbrs[DOWN]);
 	MPI_Cart_shift(cartcomm, 1, 1, &nbrs[LEFT], &nbrs[RIGHT]);
 
-	char cell[5];
 	/*Ranks 0 to and including 3 get to be lands*/
 	if(rank < 4){ 
-		cell = "Lands";
+		char cell[5] = "Lands";
 	}
 	else{
-		cell = "Water";
+		char cell[5] = "Water";
 	}
 	printf("rank = %d, I am of type %s", rank, cell);
 
