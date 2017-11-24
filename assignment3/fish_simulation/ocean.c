@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <mpi.h>
+#include <time.h>
+#include "fish.h"
+#include "logger.h"
 
 int main (int argc, char** argv) {
     int rank, size;
@@ -8,7 +11,11 @@ int main (int argc, char** argv) {
 
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    int dims[2] = {3, 4};
+    
+    /* Putting time as seed for the random generator */
+    srand(time(NULL) + rank);
+
+    int dims[2] = {2, 2};
     int periods[2] = {1,1};
     int coords[2];
     int reorder = 1;
@@ -37,6 +44,11 @@ int main (int argc, char** argv) {
     printf("-------\n");
 
     /* Testing fish */
+    fish_group fish;
+    fish_group_constructor(&fish, 1);
+
+    print_fish_group(&fish);
+    int dir = get_current_direction(&fish);
 
     /* Testing boats */
 
