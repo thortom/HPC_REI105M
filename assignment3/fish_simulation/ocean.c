@@ -3,31 +3,23 @@
 #include <time.h>
 #include "logger.h"
 
-/*Constants for numbers*/
-#define SIZE 16
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
-#define MAX_NUMB_FISH 4
-
 /* fish.h */
 typedef struct fish_group_identity {
     int group_number;
     int numb_fish;
     int direction;
-} fish_group;
+} Fish_group;
 
 /* Global variables */
-fish_group FISH_NULL_DATA = {-1, -1};
+Fish_group FISH_NULL_DATA = {-1, -1};
 
-void fish_group_constructor(fish_group *me, int group_number);
-void print_fish_group(fish_group *me);
-void update_fish_direction(fish_group *me);
-int fish_data_equal(fish_group data_1, fish_group data_2);
+void fish_group_constructor(Fish_group *me, int group_number);
+void print_fish_group(Fish_group *me);
+void update_fish_direction(Fish_group *me);
+int fish_data_equal(Fish_group data_1, Fish_group data_2);
 /* fish.h - Ends */
 /* fish.c */
-void fish_group_constructor(fish_group *me, int group_number)
+void fish_group_constructor(Fish_group *me, int group_number)
 {
     me->group_number = group_number;
     /* random int between 10 and 20 */
@@ -36,19 +28,19 @@ void fish_group_constructor(fish_group *me, int group_number)
     me->direction = (rand() % 4);
 }
 
-void print_fish_group(fish_group *me)
+void print_fish_group(Fish_group *me)
 {
     log_info("Fish group number: %d, contains: %d fish", me->group_number, me->numb_fish);
 }
 
-void update_fish_direction(fish_group *me)
+void update_fish_direction(Fish_group *me)
 {
     /* Up, Down, Left, Right */
     me->direction = rand() % 4;
     log_debug("Fish group: %d heading: %d", me->group_number, me->direction);
 }
 
-int fish_data_equal(fish_group data_1, fish_group data_2)
+int fish_data_equal(Fish_group data_1, Fish_group data_2)
 {
     if (data_1.group_number == data_2.group_number &&
         data_1.numb_fish == data_2.numb_fish)
@@ -66,18 +58,18 @@ typedef struct boat_identity {
     int number;
     int numb_fish_caught;
     int direction;
-} boat;
+} Boat;
 
 /* Global variables */
-boat BOAT_NULL_DATA = {-1, -1};
+Boat BOAT_NULL_DATA = {-1, -1};
 
-void boat_constructor(boat *me, int number);
-void print_boat(boat *me);
-void update_boat_direction(boat *me);
-int boat_data_equal(boat data_1, boat data_2);
+void boat_constructor(Boat *me, int number);
+void print_boat(Boat *me);
+void update_boat_direction(Boat *me);
+int boat_data_equal(Boat data_1, Boat data_2);
 /* boat.h - Ends */
 /* boat.c */
-void boat_constructor(boat *me, int number)
+void boat_constructor(Boat *me, int number)
 {
     me->number = number;
     me->numb_fish_caught = 0;
@@ -85,19 +77,19 @@ void boat_constructor(boat *me, int number)
     me->direction = (rand() % 4);
 }
 
-void print_boat(boat *me)
+void print_boat(Boat *me)
 {
     log_info("Boat number: %d, has caught: %d fish", me->number, me->numb_fish_caught);
 }
 
-void update_boat_direction(boat *me)
+void update_boat_direction(Boat *me)
 {
     /* Up, Down, Left, Right */
     me->direction = rand() % 4;
     log_debug("Boat: %d heading: %d", me->number, me->direction);
 }
 
-int boat_data_equal(boat data_1, boat data_2)
+int boat_data_equal(Boat data_1, Boat data_2)
 {
     if (data_1.number == data_2.number &&
         data_1.numb_fish_caught == data_2.numb_fish_caught)
@@ -112,11 +104,15 @@ int boat_data_equal(boat data_1, boat data_2)
 /* boat.c - Ends */
 
 /* node.h */
+
+/*Constant variables*/
+#define MAX_NUMB_FISH 4
+
 typedef struct node_identity {
     int rank;
     int coords[2];
-    boat my_boat;
-    fish_group my_fish[MAX_NUMB_FISH];
+    Boat my_boat;
+    Fish_group my_fish[MAX_NUMB_FISH];
 } Node;
 /* node.h - Ends */
 /* node.c */
@@ -127,14 +123,14 @@ void node_constructor(Node *me, int rank, int coords[])
     me->coords[1] = coords[1];
 
     int i = 0;
-    boat my_boat = BOAT_NULL_DATA;
+    Boat my_boat = BOAT_NULL_DATA;
     for (i = 0; i < MAX_NUMB_FISH; i++)
     {
         me->my_fish[i] = FISH_NULL_DATA;
     }
 }
 
-void initialize_node_data(Node *me) /*int rank, int coords[], fish_group my_fish[], boat *my_boat*/
+void initialize_node_data(Node *me)
 {
     if (me->coords[0] == 0 && me->coords[1] == 0)
     {
@@ -143,7 +139,7 @@ void initialize_node_data(Node *me) /*int rank, int coords[], fish_group my_fish
     else if ((me->coords[0] == 1 && me->coords[1] == 1) ||
         (me->coords[0] == 0 && me->coords[1] == 1))
     {
-        fish_group fish;
+        Fish_group fish;
         fish_group_constructor(&fish, me->rank);
         me->my_fish[0] = fish;
         log_debug("Coords (%d, %d) contains fish", me->coords[0], me->coords[1]);
@@ -189,6 +185,47 @@ void get_number_of_items_to_transmit(Node *node, int n_items_to_transmit[], int 
     }
 }
 /* node.c - Ends */
+
+/*Constants for numbers*/
+#define SIZE 16
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
+
+/* Global variables */
+MPI_Datatype mpi_fish_data_type;
+MPI_Datatype mpi_boat_data_type;
+
+void init_mpi_custom_types()
+{
+    /* create a MPI type for struct fish_group */
+    int nitems=3;
+    int blocklengths[3] = {1, 1, 1};
+    MPI_Datatype types[3] = {MPI_INT, MPI_INT, MPI_INT};
+    MPI_Aint offsets[3];
+
+    offsets[0] = offsetof(Fish_group, group_number);
+    offsets[1] = offsetof(Fish_group, numb_fish);
+    offsets[2] = offsetof(Fish_group, direction);
+
+    MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_fish_data_type);
+    MPI_Type_commit(&mpi_fish_data_type);
+
+    /* create a MPI type for struct boat */
+    offsets[0] = offsetof(Boat, number);
+    offsets[1] = offsetof(Boat, numb_fish_caught);
+    offsets[2] = offsetof(Boat, direction);
+
+    MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_boat_data_type);
+    MPI_Type_commit(&mpi_boat_data_type);
+}
+
+void free_custom_mpi_types()
+{
+    MPI_Type_free(&mpi_fish_data_type);
+    MPI_Type_free(&mpi_boat_data_type);
+}
 
 int main (int argc, char** argv)
 {
