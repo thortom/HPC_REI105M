@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <mpi.h>
+#include <stdlib.h>
 /*Constants for numbers*/
 #define SIZE 16
 #define UP 0
