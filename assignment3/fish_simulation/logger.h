@@ -14,7 +14,15 @@ void init_logger();
 double get_current_time();
 
 /* log_info macro */
+#define INFO_LEVEL  0
+#define DEBUG_LEVEL 1
+#define LOG_LEVEL   DEBUG_LEVEL
+
 #define log_info(format, ...) printf("%f sec [%s:%d] " format "\n", (get_current_time() - START_TIME), __FILE__, __LINE__, ## __VA_ARGS__)
+#if LOG_LEVEL >= DEBUG_LEVEL
 #define log_debug(format, ...) log_info("DEBUG: " format, ## __VA_ARGS__)
+#else
+#define log_debug(format, ...)
+#endif
 
 #endif

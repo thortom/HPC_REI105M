@@ -103,10 +103,17 @@ int boat_data_equal(Boat data_1, Boat data_2)
 }
 /* boat.c - Ends */
 
-/* node.h */
-
 /*Constant variables*/
 #define MAX_NUMB_FISH 4
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
+
+/* Global variables */
+MPI_Datatype mpi_fish_data_type;
+MPI_Datatype mpi_boat_data_type;
+MPI_Datatype mpi_transmit_data_type;
 
 typedef struct node_identity {
     int rank;
@@ -124,8 +131,6 @@ typedef struct transmit_data_identity {
 /* Global variables */
 Transmit_data TRANSMIT_NULL_DATA = {0, 0, -1};
 
-/* node.h - Ends */
-/* node.c */
 void node_constructor(Node *me, int rank, int coords[])
 {
     me->rank = rank;
@@ -223,19 +228,78 @@ void log_node_info(Node *node)
     }
     log_info("Node [%d] end of info", node->rank);
 }
-/* node.c - Ends */
 
-/*Constants for numbers*/
-#define SIZE 16
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
+void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data data_in[], int nbrs[])
+{
+    int source, dest, i, tag=1, joining_nodes=4;
+    MPI_Request reqs[8];
+    MPI_Status stats[8];
 
-/* Global variables */
-MPI_Datatype mpi_fish_data_type;
-MPI_Datatype mpi_boat_data_type;
-MPI_Datatype mpi_transmit_data_type;
+    for(i = 0; i < joining_nodes; i++)
+    {
+        data_out[i] = TRANSMIT_NULL_DATA;
+        get_number_of_items_to_transmit(node, &data_out[i], i);
+
+        dest = nbrs[i];
+        source = nbrs[i];
+
+        MPI_Isend(&data_out[i], 1, mpi_transmit_data_type, dest, tag, MPI_COMM_WORLD, &reqs[i]);
+        /* log_debug("Node rank: %d will transmit %d fish groups and %d boats, to %d",
+                                node->rank, data_out[i].numb_fish, data_out[i].numb_boats, dest); */
+        data_in[i] = TRANSMIT_NULL_DATA;
+        MPI_Irecv(&data_in[i], 1, mpi_transmit_data_type, source, tag, MPI_COMM_WORLD, &reqs[i + joining_nodes]);
+    }
+
+    /* Wait forgiven MPI Requests to complete */
+    MPI_Waitall(8, reqs, stats);
+}
+
+void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[], int nbrs[])
+{
+    int source, dest, i, j, k, tag=1, joining_nodes=4;
+    MPI_Request dummy_request;
+    MPI_Status dummy_status;
+    Fish_group new_fish;
+
+    for (i = 0; i < joining_nodes; i++)
+    {
+        /* log_debug("Node [%d] data_in: fish=%d, boats=%d, from=%d", node->rank, data_in[i].numb_fish,
+                                    data_in[i].numb_boats, data_in[i].from_rank); */
+        
+        dest = nbrs[i];
+        source = nbrs[i];
+        for (j = 0; j < data_out[i].numb_fish; j++)
+        {
+            for (k = 0; k < MAX_NUMB_FISH; k++)
+            {
+                if (node->my_fish[k].direction == i)
+                {
+                    MPI_Isend(&node->my_fish[k], 1, mpi_fish_data_type, dest, tag, MPI_COMM_WORLD, &dummy_request);
+                    node->my_fish[k] = FISH_NULL_DATA;
+                }
+            }
+        }
+        if (data_out[i].numb_boats)
+        {
+            MPI_Isend(&node->my_boat, 1, mpi_boat_data_type, dest, tag, MPI_COMM_WORLD, &dummy_request);
+            node->my_boat = BOAT_NULL_DATA;
+        }
+
+        for (j = 0; j < data_in[i].numb_fish; j++)
+        {
+            MPI_Recv(&new_fish, 1, mpi_fish_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
+
+            /* TODO: This can fail when there are more then 4 fish groups */
+            add_fish(node, new_fish);
+        }
+        if (data_in[i].numb_boats)
+        {
+            /* TODO: This can fail when there are more then one boat */
+            MPI_Irecv(&node->my_boat, 1, mpi_boat_data_type, source, tag, MPI_COMM_WORLD, &dummy_request);
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+}
 
 void init_mpi_custom_types()
 {
@@ -346,6 +410,7 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
 int main (int argc, char** argv)
 {
     init_logger();
+
     int rank;
     int source, dest, outbuf, i, j, k, tag=1, joining_nodes=4;
     int nbrs[4];
@@ -359,7 +424,7 @@ int main (int argc, char** argv)
     init_mpi_custom_types();
     
     init_cartesian_grid(&rank, coords, nbrs, dims);
-    log_debug("Node rank: %d has coords: (%d, %d)", rank, coords[0], coords[1]);
+    /* log_debug("Node rank: %d has coords: (%d, %d)", rank, coords[0], coords[1]); */
 
     sleep(1);
 
@@ -379,69 +444,14 @@ int main (int argc, char** argv)
 
     Transmit_data data_out[joining_nodes];
     Transmit_data data_in[joining_nodes];
-    Fish_group incoming_fish[MAX_NUMB_FISH];
-    int running = 3;
-    Fish_group new_fish;
+    int running = 1;
     while (running)
     {
-        /* For each neighbor check if fish/boat are coming to me (Isend and Irecv) */
-        /* TODO: Move this to a node specific function */
-        for(i = 0; i < joining_nodes; i++)
-        {
-            data_out[i] = TRANSMIT_NULL_DATA;
-            get_number_of_items_to_transmit(&node, &data_out[i], i);
-
-            dest = nbrs[i];
-            source = nbrs[i];
-
-            MPI_Isend(&data_out[i], 1, mpi_transmit_data_type, dest, tag, MPI_COMM_WORLD, &reqs[i]);
-            log_debug("Node rank: %d will transmit %d fish groups and %d boats, to %d", rank, data_out[i].numb_fish, data_out[i].numb_boats, dest);
-            data_in[i] = TRANSMIT_NULL_DATA;
-            MPI_Irecv(&data_in[i], 1, mpi_transmit_data_type, source, tag, MPI_COMM_WORLD, &reqs[i + joining_nodes]);
-        }
-
-        /* Wait forgiven MPI Requests to complete */
-        MPI_Waitall(8, reqs, stats);
+        /* For each neighbor check for where the fish and boat are going */
+        collect_transmit_info(&node, data_out, data_in, nbrs);
 
         /* Exchange fish and boats to there correct destination node */
-        /* TODO: Move this to a node specific function */
-        for (i = 0; i < joining_nodes; i++)
-        {
-            log_debug("Node [%d] data_in: fish=%d, boats=%d, from=%d", rank, data_in[i].numb_fish,
-                                        data_in[i].numb_boats, data_in[i].from_rank);
-            dest = nbrs[i];
-            source = nbrs[i];
-            for (j = 0; j < data_out[i].numb_fish; j++)
-            {
-                for (k = 0; k < MAX_NUMB_FISH; k++)
-                {
-                    if (node.my_fish[k].direction == i)
-                    {
-                        MPI_Isend(&node.my_fish[k], 1, mpi_fish_data_type, dest, tag, MPI_COMM_WORLD, &dummy_request);
-                        node.my_fish[k] = FISH_NULL_DATA;
-                    }
-                }
-            }
-            if (data_out[i].numb_boats)
-            {
-                MPI_Isend(&node.my_boat, 1, mpi_boat_data_type, dest, tag, MPI_COMM_WORLD, &dummy_request);
-                node.my_boat = BOAT_NULL_DATA;
-            }
-
-            for (j = 0; j < data_in[i].numb_fish; j++)
-            {
-                MPI_Recv(&new_fish, 1, mpi_fish_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
-
-                /* TODO: This can fail when there are more then 4 fish groups */
-                add_fish(&node, new_fish);
-            }
-            if (data_in[i].numb_boats)
-            {
-                /* TODO: This can fail when there are more then one boat */
-                MPI_Irecv(&node.my_boat, 1, mpi_boat_data_type, source, tag, MPI_COMM_WORLD, &dummy_request);
-            }
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
+        transfer_data(&node, data_out, data_in, nbrs);
 
         log_node_info(&node);
 
