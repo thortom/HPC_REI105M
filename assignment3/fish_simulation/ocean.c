@@ -24,8 +24,7 @@ void fish_group_constructor(Fish_group *me, int group_number)
     me->group_number = group_number;
     /* random int between 10 and 20 */
     me->numb_fish = (rand() % 11) + 10;
-    /* Up, Down, Left, Right */
-    me->direction = (rand() % 4);
+    me->direction = -1;
 }
 
 void print_fish_group(Fish_group *me)
@@ -73,8 +72,7 @@ void boat_constructor(Boat *me, int number)
 {
     me->number = number;
     me->numb_fish_caught = 0;
-    /* Up, Down, Left, Right */
-    me->direction = (rand() % 4);
+    me->direction = -1;
 }
 
 void print_boat(Boat *me)
@@ -219,12 +217,14 @@ void log_node_info(Node *node)
     {
         if (!fish_data_equal(node->my_fish[i], FISH_NULL_DATA))
         {
-            print_fish_group(&node->my_fish[i]);
+            log_info("      N[%d]: FishGroup [%d] containing %d fish",
+                node->rank, node->my_fish[i].group_number, node->my_fish[i].numb_fish);
         }
     }
     if (!boat_data_equal(node->my_boat, BOAT_NULL_DATA))
     {
-        print_boat(&node->my_boat);
+        log_info("      N[%d]: Boat [%d] containing %d fish",
+                node->rank, node->my_boat.number, node->my_boat.numb_fish_caught);
     }
     log_info("Node [%d] end of info", node->rank);
 }
@@ -301,6 +301,31 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
+void do_action(Node *node)
+{
+    int fish_caught = 0;
+    if (!boat_data_equal(node->my_boat, BOAT_NULL_DATA))
+    {
+        for (int i = 0; i < MAX_NUMB_FISH; i++)
+        {
+            if (!fish_data_equal(node->my_fish[i], FISH_NULL_DATA))
+            {
+                /* The boat catches some fish */
+                fish_caught = rand() % node->my_fish[i].numb_fish;
+                node->my_boat.numb_fish_caught += fish_caught;
+
+                node->my_fish[i].numb_fish -= fish_caught;
+                /* If all the fish in this group is caught then
+                    the group it dead */
+                if (node->my_fish[i].numb_fish == 0)
+                {
+                    node->my_fish[i] = FISH_NULL_DATA;
+                }
+            }
+        }
+    }
+}
+
 void init_mpi_custom_types()
 {
     /* Create a MPI type for struct Fish_group */
@@ -356,7 +381,6 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cartcomm); 
 
     MPI_Comm_rank(cartcomm, rank);
-    log_debug("Obtained the rank: %d", *rank);
 
     MPI_Cart_coords(cartcomm, *rank, 2, coords);
 
@@ -424,7 +448,7 @@ int main (int argc, char** argv)
     init_mpi_custom_types();
     
     init_cartesian_grid(&rank, coords, nbrs, dims);
-    /* log_debug("Node rank: %d has coords: (%d, %d)", rank, coords[0], coords[1]); */
+    log_debug("Node rank: %d has coords: (%d, %d)", rank, coords[0], coords[1]);
 
     sleep(1);
 
@@ -444,7 +468,7 @@ int main (int argc, char** argv)
 
     Transmit_data data_out[joining_nodes];
     Transmit_data data_in[joining_nodes];
-    int running = 1;
+    int running = 5;
     while (running)
     {
         /* For each neighbor check for where the fish and boat are going */
@@ -456,7 +480,7 @@ int main (int argc, char** argv)
         log_node_info(&node);
 
         /* Boats go fish */
-        /* TODO: This */
+        do_action(&node);
 
         /* Update fish and boats status */
         update_status(&node);
