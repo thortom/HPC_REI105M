@@ -11,9 +11,6 @@ typedef struct boat_identity {
     int direction;
 } Boat;
 
-/* Global variables */
-Boat BOAT_NULL_DATA = {-1, -1, -1};
-
 void boat_constructor(Boat *me, int number);
 void print_boat(Boat *me);
 void update_boat_direction(Boat *me, int coords[]);

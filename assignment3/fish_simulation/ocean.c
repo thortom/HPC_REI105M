@@ -9,6 +9,8 @@
 
 /* Constant variables */
 #define MAX_NUMB_FISH 7
+const Fish_group FISH_NULL_DATA = {-1, -1, -1};
+const Boat       BOAT_NULL_DATA = {-1, -1, -1};
 
 /* Global variables */
 MPI_Datatype mpi_fish_data_type;

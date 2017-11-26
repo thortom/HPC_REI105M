@@ -11,9 +11,6 @@ typedef struct fish_group_identity {
     int direction;
 } Fish_group;
 
-/* Global variables */
-Fish_group FISH_NULL_DATA = {-1, -1, -1};
-
 void fish_group_constructor(Fish_group *me, int group_number);
 void print_fish_group(Fish_group *me);
 void update_fish_direction(Fish_group *me);
