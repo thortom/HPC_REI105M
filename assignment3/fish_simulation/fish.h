@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "logger.h"
+#include "physics.h"
 
 typedef struct fish_group_identity {
     int group_number;

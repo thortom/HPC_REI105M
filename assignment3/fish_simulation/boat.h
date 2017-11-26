@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "logger.h"
+#include "physics.h"
 
 typedef struct boat_identity {
     int number;
