@@ -4,6 +4,14 @@
 #include "logger.h"
 
 /* fish.h */
+#ifndef DIRECTIONS
+#define DIRECTIONS
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
+#endif
+
 typedef struct fish_group_identity {
     int group_number;
     int numb_fish;
@@ -53,6 +61,14 @@ int fish_data_equal(Fish_group data_1, Fish_group data_2)
 }
 /* fish.c - Ends */
 /* boat.h */
+#ifndef DIRECTIONS
+#define DIRECTIONS
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
+#endif
+
 typedef struct boat_identity {
     int number;
     int numb_fish_caught;
@@ -64,7 +80,7 @@ Boat BOAT_NULL_DATA = {-1, -1, -1};
 
 void boat_constructor(Boat *me, int number);
 void print_boat(Boat *me);
-void update_boat_direction(Boat *me);
+void update_boat_direction(Boat *me, int coords[]);
 int boat_data_equal(Boat data_1, Boat data_2);
 /* boat.h - Ends */
 /* boat.c */
@@ -80,11 +96,36 @@ void print_boat(Boat *me)
     log_info("Boat number: %d, has caught: %d fish", me->number, me->numb_fish_caught);
 }
 
-void update_boat_direction(Boat *me)
+void update_boat_direction(Boat *me, int coords[])
 {
-    /* Up, Down, Left, Right */
-    me->direction = rand() % 4;
-    log_debug("Boat: %d heading: %d", me->number, me->direction);
+    if (me->numb_fish_caught)
+    {
+        if (coords[0] == 0 && coords[1] == 0)
+        {
+            /* Unload the caught fish */
+            me->direction = rand() % 4;
+            log_debug("Boat: %d unloaded %d fish and now heading: %d",
+                                me->number, me->numb_fish_caught, me->direction);
+            me->numb_fish_caught = 0;
+            return;
+        }
+        else if (coords[0] != 0)
+        {
+            me->direction = UP;
+        }
+        else if (coords[1] != 0)
+        {
+            me->direction = LEFT;
+        }
+        log_debug("Boat: %d heading to harbor in the direction: %d", me->number, me->direction);
+    }
+    else
+    {
+        /* Up, Down, Left, Right */
+        me->direction = rand() % 4;
+        log_debug("Boat: %d heading: %d", me->number, me->direction);
+        return;
+    }
 }
 
 int boat_data_equal(Boat data_1, Boat data_2)
@@ -103,10 +144,13 @@ int boat_data_equal(Boat data_1, Boat data_2)
 
 /*Constant variables*/
 #define MAX_NUMB_FISH 4
+#ifndef DIRECTIONS
+#define DIRECTIONS
 #define UP 0
 #define DOWN 1
 #define LEFT 2
 #define RIGHT 3
+#endif
 
 /* Global variables */
 MPI_Datatype mpi_fish_data_type;
@@ -171,7 +215,7 @@ void update_status(Node *me)
     }
     if (!boat_data_equal(me->my_boat, BOAT_NULL_DATA))
     {
-        update_boat_direction(&(me->my_boat));
+        update_boat_direction(&(me->my_boat), me->coords);
     }
 }
 
@@ -468,7 +512,7 @@ int main (int argc, char** argv)
 
     Transmit_data data_out[joining_nodes];
     Transmit_data data_in[joining_nodes];
-    int running = 5;
+    int running = 20;
     while (running)
     {
         /* For each neighbor check for where the fish and boat are going */
