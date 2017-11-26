@@ -1,16 +1,31 @@
 #include <stdio.h>
 #include <mpi.h>
+#include <math.h>
 #include <time.h>
 #include "logger.h"
 
-/* fish.h */
-#ifndef DIRECTIONS
-#define DIRECTIONS
+/* physics.h */
 #define UP 0
 #define DOWN 1
 #define LEFT 2
 #define RIGHT 3
-#endif
+
+const char* get_direction_string(int direction);
+/* physics.h - ENDS */
+
+/* physics.c */
+const char* get_direction_string(int direction)
+{
+    static char* directions[] = {"UP", "DOWN", "LEFT", "RIGHT"}; 
+    static char badFood[] = "Unknown";
+    if (direction < 0 || direction > 3) 
+        return badFood;
+    else
+        return directions[direction];
+}
+/* physics.c - ENDS */
+
+/* fish.h */
 
 typedef struct fish_group_identity {
     int group_number;
@@ -44,7 +59,8 @@ void update_fish_direction(Fish_group *me)
 {
     /* Up, Down, Left, Right */
     me->direction = rand() % 4;
-    log_debug("Fish group: %d heading: %d", me->group_number, me->direction);
+    log_debug("Fish group: %d heading: %s",
+        me->group_number, get_direction_string(me->direction));
 }
 
 int fish_data_equal(Fish_group data_1, Fish_group data_2)
@@ -61,13 +77,6 @@ int fish_data_equal(Fish_group data_1, Fish_group data_2)
 }
 /* fish.c - Ends */
 /* boat.h */
-#ifndef DIRECTIONS
-#define DIRECTIONS
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
-#endif
 
 typedef struct boat_identity {
     int number;
@@ -104,8 +113,8 @@ void update_boat_direction(Boat *me, int coords[])
         {
             /* Unload the caught fish */
             me->direction = rand() % 4;
-            log_debug("Boat: %d unloaded %d fish and now heading: %d",
-                                me->number, me->numb_fish_caught, me->direction);
+            log_debug("Boat: %d unloaded %d fish and now heading: %s",
+                    me->number, me->numb_fish_caught, get_direction_string(me->direction));
             me->numb_fish_caught = 0;
             return;
         }
@@ -117,13 +126,14 @@ void update_boat_direction(Boat *me, int coords[])
         {
             me->direction = LEFT;
         }
-        log_debug("Boat: %d heading to harbor in the direction: %d", me->number, me->direction);
+        log_debug("Boat: %d with %d fish, heading to harbor in the direction: %s",
+                        me->number, me->numb_fish_caught, get_direction_string(me->direction));
     }
     else
     {
         /* Up, Down, Left, Right */
         me->direction = rand() % 4;
-        log_debug("Boat: %d heading: %d", me->number, me->direction);
+        log_debug("Boat: %d heading: %s", me->number, get_direction_string(me->direction));
         return;
     }
 }
@@ -142,15 +152,8 @@ int boat_data_equal(Boat data_1, Boat data_2)
 }
 /* boat.c - Ends */
 
-/*Constant variables*/
-#define MAX_NUMB_FISH 4
-#ifndef DIRECTIONS
-#define DIRECTIONS
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
-#endif
+/* Constant variables */
+#define MAX_NUMB_FISH 7
 
 /* Global variables */
 MPI_Datatype mpi_fish_data_type;
@@ -186,19 +189,26 @@ void node_constructor(Node *me, int rank, int coords[])
     }
 }
 
-void initialize_node_data(Node *me)
+void initialize_node_data(Node *me, int world_size)
 {
     if (me->coords[0] == 0 && me->coords[1] == 0)
     {
         boat_constructor(&me->my_boat, me->rank);
     }
-    else if ((me->coords[0] == 1 && me->coords[1] == 1) ||
-        (me->coords[0] == 0 && me->coords[1] == 1))
+    /* Add the second boat if the world is big enough */
+    else if (world_size > 4 &&
+             me->coords[0] == 0 && me->coords[1] == 1)
+    {
+        /* TODO: Should this boat start from (0, 0) or is it OK here?*/
+        boat_constructor(&me->my_boat, me->rank);
+    }
+    /* Assign fish to almost half of the cells */
+    else if (((me->coords[0] + me->coords[1]) % 2) == 0)
     {
         Fish_group fish;
         fish_group_constructor(&fish, me->rank);
         me->my_fish[0] = fish;
-        log_debug("Coords (%d, %d) contains fish", me->coords[0], me->coords[1]);
+        log_debug("Node [%d]: (%d, %d) contains fish", me->rank, me->coords[0], me->coords[1]);
         print_fish_group(&fish);
     }
 }
@@ -300,11 +310,14 @@ void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data d
 
 void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[], int nbrs[])
 {
-    int source, dest, i, j, k, tag=1, joining_nodes=4;
+    int source, dest, i, j, k, ok, tag=1, joining_nodes=4;
     MPI_Request dummy_request;
     MPI_Status dummy_status;
     Fish_group new_fish;
+    Boat dummy_boat;
 
+    /* Transfer the fish first then the boats */
+    /* If done in the same for-loop then the MPI_Send - MPI_Recv can interfere each other */
     for (i = 0; i < joining_nodes; i++)
     {
         /* log_debug("Node [%d] data_in: fish=%d, boats=%d, from=%d", node->rank, data_in[i].numb_fish,
@@ -312,6 +325,7 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
         
         dest = nbrs[i];
         source = nbrs[i];
+        
         for (j = 0; j < data_out[i].numb_fish; j++)
         {
             for (k = 0; k < MAX_NUMB_FISH; k++)
@@ -323,23 +337,48 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
                 }
             }
         }
-        if (data_out[i].numb_boats)
-        {
-            MPI_Isend(&node->my_boat, 1, mpi_boat_data_type, dest, tag, MPI_COMM_WORLD, &dummy_request);
-            node->my_boat = BOAT_NULL_DATA;
-        }
 
         for (j = 0; j < data_in[i].numb_fish; j++)
         {
             MPI_Recv(&new_fish, 1, mpi_fish_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
 
-            /* TODO: This can fail when there are more then 4 fish groups */
+            /* TODO: This can fail when there are more than 4 fish groups */
             add_fish(node, new_fish);
         }
+    }
+
+    /* Transfer the boats */
+    for (i = 0; i < joining_nodes; i++)
+    {
+        dest = nbrs[i];
+        source = nbrs[i];
+
+        if (data_out[i].numb_boats)
+        {
+            MPI_Send(&node->my_boat, 1, mpi_boat_data_type, dest, tag, MPI_COMM_WORLD);
+            MPI_Recv(&ok, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &dummy_status);
+            /* ok is True if the boat did successfully transfer over */
+            if (ok)
+            {
+                node->my_boat = BOAT_NULL_DATA;
+            }
+        }
+
         if (data_in[i].numb_boats)
         {
-            /* TODO: This can fail when there are more then one boat */
-            MPI_Irecv(&node->my_boat, 1, mpi_boat_data_type, source, tag, MPI_COMM_WORLD, &dummy_request);
+            if (boat_data_equal(node->my_boat, BOAT_NULL_DATA))
+            {
+                ok = 1;
+                MPI_Recv(&node->my_boat, 1, mpi_boat_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
+                MPI_Send(&ok, 1, MPI_INT, dest, tag, MPI_COMM_WORLD);
+            }
+            else
+            {
+                ok = 0; /* Not OK */
+                /* The node already contains one boat thus it will not accept another one */
+                MPI_Recv(&dummy_boat, 1, mpi_boat_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
+                MPI_Send(&ok, 1, MPI_INT, dest, tag, MPI_COMM_WORLD);
+            }
         }
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -477,18 +516,30 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
 
 int main (int argc, char** argv)
 {
+    /* TODO: This logger should be able to log to file with MPI-I/O */
     init_logger();
 
-    int rank;
+    int rank, world_size;
     int source, dest, outbuf, i, j, k, tag=1, joining_nodes=4;
     int nbrs[4];
-    int dims[2] = {2, 2};
+    int dims[2];
     int coords[2];
     MPI_Request reqs[8], dummy_request;
     MPI_Status stats[8], dummy_status;
 
     /* Starting with MPI program*/
     MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    if (world_size == 4 || world_size == 9 || world_size == 16)
+    {
+        dims[0] = (int)sqrt((double)world_size);
+        dims[1] = (int)sqrt((double)world_size);
+    }
+    else
+    {
+        log_info("The requested ocean size is not supported");
+        return 1;
+    }
     init_mpi_custom_types();
     
     init_cartesian_grid(&rank, coords, nbrs, dims);
@@ -503,7 +554,7 @@ int main (int argc, char** argv)
     node_constructor(&node, rank, coords);
 
     /* Adding fish and boats to each node */
-    initialize_node_data(&node);
+    initialize_node_data(&node, world_size);
 
     /* Update fish and boats status (update there desired directions) */
     update_status(&node);
