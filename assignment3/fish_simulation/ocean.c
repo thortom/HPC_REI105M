@@ -3,154 +3,9 @@
 #include <math.h>
 #include <time.h>
 #include "logger.h"
-
-/* physics.h */
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
-
-const char* get_direction_string(int direction);
-/* physics.h - ENDS */
-
-/* physics.c */
-const char* get_direction_string(int direction)
-{
-    static char* directions[] = {"UP", "DOWN", "LEFT", "RIGHT"}; 
-    static char badFood[] = "Unknown";
-    if (direction < 0 || direction > 3) 
-        return badFood;
-    else
-        return directions[direction];
-}
-/* physics.c - ENDS */
-
-/* fish.h */
-
-typedef struct fish_group_identity {
-    int group_number;
-    int numb_fish;
-    int direction;
-} Fish_group;
-
-/* Global variables */
-Fish_group FISH_NULL_DATA = {-1, -1, -1};
-
-void fish_group_constructor(Fish_group *me, int group_number);
-void print_fish_group(Fish_group *me);
-void update_fish_direction(Fish_group *me);
-int fish_data_equal(Fish_group data_1, Fish_group data_2);
-/* fish.h - Ends */
-/* fish.c */
-void fish_group_constructor(Fish_group *me, int group_number)
-{
-    me->group_number = group_number;
-    /* random int between 10 and 20 */
-    me->numb_fish = (rand() % 11) + 10;
-    me->direction = -1;
-}
-
-void print_fish_group(Fish_group *me)
-{
-    log_info("Fish group number: %d, contains: %d fish", me->group_number, me->numb_fish);
-}
-
-void update_fish_direction(Fish_group *me)
-{
-    /* Up, Down, Left, Right */
-    me->direction = rand() % 4;
-    log_debug("Fish group: %d heading: %s",
-        me->group_number, get_direction_string(me->direction));
-}
-
-int fish_data_equal(Fish_group data_1, Fish_group data_2)
-{
-    if (data_1.group_number == data_2.group_number &&
-        data_1.numb_fish == data_2.numb_fish)
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-/* fish.c - Ends */
-/* boat.h */
-
-typedef struct boat_identity {
-    int number;
-    int numb_fish_caught;
-    int direction;
-} Boat;
-
-/* Global variables */
-Boat BOAT_NULL_DATA = {-1, -1, -1};
-
-void boat_constructor(Boat *me, int number);
-void print_boat(Boat *me);
-void update_boat_direction(Boat *me, int coords[]);
-int boat_data_equal(Boat data_1, Boat data_2);
-/* boat.h - Ends */
-/* boat.c */
-void boat_constructor(Boat *me, int number)
-{
-    me->number = number;
-    me->numb_fish_caught = 0;
-    me->direction = -1;
-}
-
-void print_boat(Boat *me)
-{
-    log_info("Boat number: %d, has caught: %d fish", me->number, me->numb_fish_caught);
-}
-
-void update_boat_direction(Boat *me, int coords[])
-{
-    if (me->numb_fish_caught)
-    {
-        if (coords[0] == 0 && coords[1] == 0)
-        {
-            /* Unload the caught fish */
-            me->direction = rand() % 4;
-            log_debug("Boat: %d unloaded %d fish and now heading: %s",
-                    me->number, me->numb_fish_caught, get_direction_string(me->direction));
-            me->numb_fish_caught = 0;
-            return;
-        }
-        else if (coords[0] != 0)
-        {
-            me->direction = UP;
-        }
-        else if (coords[1] != 0)
-        {
-            me->direction = LEFT;
-        }
-        log_debug("Boat: %d with %d fish, heading to harbor in the direction: %s",
-                        me->number, me->numb_fish_caught, get_direction_string(me->direction));
-    }
-    else
-    {
-        /* Up, Down, Left, Right */
-        me->direction = rand() % 4;
-        log_debug("Boat: %d heading: %s", me->number, get_direction_string(me->direction));
-        return;
-    }
-}
-
-int boat_data_equal(Boat data_1, Boat data_2)
-{
-    if (data_1.number == data_2.number &&
-        data_1.numb_fish_caught == data_2.numb_fish_caught)
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-/* boat.c - Ends */
+#include "physics.h"
+#include "fish.h"
+#include "boat.h"
 
 /* Constant variables */
 #define MAX_NUMB_FISH 7
@@ -317,7 +172,7 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
     Boat dummy_boat;
 
     /* Transfer the fish first then the boats */
-    /* If done in the same for-loop then the MPI_Send - MPI_Recv can interfere each other */
+    /* If done in the same for-loop then the MPI_Send - MPI_Recv can interfere with each other and fail */
     for (i = 0; i < joining_nodes; i++)
     {
         /* log_debug("Node [%d] data_in: fish=%d, boats=%d, from=%d", node->rank, data_in[i].numb_fish,
@@ -342,7 +197,7 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
         {
             MPI_Recv(&new_fish, 1, mpi_fish_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
 
-            /* TODO: This can fail when there are more than 4 fish groups */
+            /* TODO: This can fail when there are more than MAX_NUMB_FISH fish groups in the ocean */
             add_fish(node, new_fish);
         }
     }
@@ -356,7 +211,9 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
         if (data_out[i].numb_boats)
         {
             MPI_Send(&node->my_boat, 1, mpi_boat_data_type, dest, tag, MPI_COMM_WORLD);
+            log_debug("Node [%d] sent the new_boat", node->rank);
             MPI_Recv(&ok, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &dummy_status);
+            log_debug("Node [%d] received the OK signal", node->rank);
             /* ok is True if the boat did successfully transfer over */
             if (ok)
             {
@@ -369,15 +226,21 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
             if (boat_data_equal(node->my_boat, BOAT_NULL_DATA))
             {
                 ok = 1;
+                log_debug("Node [%d] will accept the boat from node [%d]", node->rank, source);
                 MPI_Recv(&node->my_boat, 1, mpi_boat_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
+                log_debug("Node [%d] received the new_boat", node->rank);
                 MPI_Send(&ok, 1, MPI_INT, dest, tag, MPI_COMM_WORLD);
             }
             else
             {
+                log_debug("Node [%d] already contains one boat thus it will not accept the boat from node [%d]",
+                                                                                            node->rank, source);
                 ok = 0; /* Not OK */
                 /* The node already contains one boat thus it will not accept another one */
                 MPI_Recv(&dummy_boat, 1, mpi_boat_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
+                log_debug("Node [%d] received the dummy_boat", node->rank);
                 MPI_Send(&ok, 1, MPI_INT, dest, tag, MPI_COMM_WORLD);
+                log_debug("Node [%d] sent the not OK signal", node->rank);
             }
         }
     }
@@ -460,7 +323,7 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
 
     /* Communicator, number of dimensions, int array specifying the number of processes in each dimension,
        logical array of size of dimensions specifying if grid is periodic or not in each dimension,
-       can reorder or not, communicator with new cartesian topology*/
+       can reorder or not, communicator with new cartesian topology */
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cartcomm); 
 
     MPI_Comm_rank(cartcomm, rank);
@@ -474,7 +337,7 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
     srand(time(NULL) + *rank);
 
     int is_ocean;
-    /* Coord (0, 0) is the harbor */
+    /* Coordinate (0, 0) is the harbor */
     if(coords[0] == 0 && coords[1] == 0)
     { 
         is_ocean = 0;
@@ -485,8 +348,6 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
         is_ocean = 1;
         log_debug("Rank = %d, is ocean", *rank);
     }
-
-    /*sleep(1);*/
 
     log_debug("Rank = %d, coord = (%d %d) my neighbors ranks are: (u, d, l, r) = (%d, %d, %d, %d)",
                         *rank, coords[0], coords[1], nbrs[UP], nbrs[DOWN], nbrs[LEFT], nbrs[RIGHT]);
@@ -505,8 +366,6 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
         MPI_Irecv(&inbuf[i], 1, MPI_INT, source, tag, MPI_COMM_WORLD, &reqs[i + joining_nodes]);
         /* inbuf contains whether the joining node is land or ocean */
     }
-
-    sleep(1);
 
     /* Wait forgiven MPI Requests to complete */
     MPI_Waitall(8, reqs, stats);
@@ -547,9 +406,6 @@ int main (int argc, char** argv)
 
     sleep(1);
 
-    /*************************************************************/
-    /* Here start the main stuff (maybe put in another function) */
-    /*************************************************************/
     Node node;
     node_constructor(&node, rank, coords);
 
@@ -563,7 +419,7 @@ int main (int argc, char** argv)
 
     Transmit_data data_out[joining_nodes];
     Transmit_data data_in[joining_nodes];
-    int running = 20;
+    int running = 5;
     while (running)
     {
         /* For each neighbor check for where the fish and boat are going */
