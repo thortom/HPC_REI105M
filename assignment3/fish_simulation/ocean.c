@@ -9,6 +9,7 @@
 
 /* Constant variables */
 #define MAX_NUMB_FISH 7
+#define PI 3.14159265358979323846
 const Fish_group FISH_NULL_DATA = {-1, -1, -1};
 const Boat       BOAT_NULL_DATA = {-1, -1, -1};
 
@@ -19,6 +20,7 @@ MPI_Datatype mpi_transmit_data_type;
 
 typedef struct node_identity {
     int rank;
+    int storm;
     int coords[2];
     Boat my_boat;
     Fish_group my_fish[MAX_NUMB_FISH];
@@ -36,6 +38,7 @@ Transmit_data TRANSMIT_NULL_DATA = {0, 0, -1};
 void node_constructor(Node *me, int rank, int coords[])
 {
     me->rank = rank;
+    me->storm = 0;
     me->coords[0] = coords[0];
     me->coords[1] = coords[1];
 
@@ -83,6 +86,16 @@ void update_status(Node *me)
     if (!boat_data_equal(me->my_boat, BOAT_NULL_DATA))
     {
         update_boat_direction(&(me->my_boat), me->coords);
+    }
+    int x = node->coords[0] + node->coords[1];
+    int k = 2*PI/1;
+    int w = 2*PI/2;
+    int t = MPI_Wtime() - START_TIME;
+    if( sin(2*PI*((k*x) - (w*t))) > 0.9){
+        node->storm = 1;
+    }
+    else{
+        node->storm = 0;
     }
 }
 
@@ -245,7 +258,7 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
 
         if (data_in[i].numb_boats)
         {
-            if (boat_data_equal(node->my_boat, BOAT_NULL_DATA))
+            if (boat_data_equal(node->my_boat, BOAT_NULL_DATA) && !node->storm)
             {
                 ok = 1;
                 log_debug("Node [%d] will accept the boat from node [%d]", node->rank, source);
