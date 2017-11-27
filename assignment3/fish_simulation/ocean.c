@@ -389,6 +389,7 @@ int main (int argc, char** argv)
     int l, offset;
     MPI_Request reqs[8], dummy_request;
     MPI_Status stats[8], dummy_status;
+    MPI_Status status;
 
     /* Starting with MPI program*/
     MPI_Init(&argc, &argv);
@@ -450,7 +451,7 @@ int main (int argc, char** argv)
         }
         offset = rank*(4/world_size)*sizeof(int);
         MPI_File_open(MPI_COMM_WORLD, 'test', MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
-        MPI_File_write_at(fhw, offset, buf, (4/size), MPI_INT, &status);
+        MPI_File_write_at(fh, offset, buf, (4/world_size), MPI_INT, &status);
         MPI_File_close(&fh);
     }
 
