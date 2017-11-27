@@ -88,10 +88,10 @@ void update_status(Node *me)
         update_boat_direction(&(me->my_boat), me->coords);
     }
     int x = me->coords[0] + me->coords[1];
-    int k = 2*PI/1;
-    int w = 2*PI/2;
-    int t = MPI_Wtime() - START_TIME;
-    if( sin(2*PI*((k*x) - (w*t))) > 0.9){
+    double k = 2*PI/1;
+    double w = 2*PI/2;
+    double t = MPI_Wtime() - START_TIME;
+    if( sin((double)(2*PI*((k*x) - (w*t)))) > 0.8){
         me->storm = 1;
         log_debug("Node [%d]: has a storm", me->rank);
     }
