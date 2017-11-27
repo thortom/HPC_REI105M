@@ -195,6 +195,10 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
             }
         }
 
+        
+    }
+    for(i = 0; i < joining_nodes; i++)
+    {
         for (j = 0; j < data_in[i].numb_fish; j++)
         {
             MPI_Recv(&new_fish, 1, mpi_fish_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
