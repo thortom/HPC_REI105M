@@ -93,6 +93,7 @@ void update_status(Node *me)
     int t = MPI_Wtime() - START_TIME;
     if( sin(2*PI*((k*x) - (w*t))) > 0.9){
         me->storm = 1;
+        log_debug("Node [%d]: has a storm", me->rank);
     }
     else{
         me->storm = 0;
