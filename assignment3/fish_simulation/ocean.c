@@ -447,10 +447,10 @@ int main (int argc, char** argv)
         running -= 1;
         int buf[4];
         for(l=0; l < 4; l++){
-            buf[l] = l
+            buf[l] = l;
         }
         offset = rank*(4/world_size)*sizeof(int);
-        MPI_File_open(MPI_COMM_WORLD, 'test', MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
+        MPI_File_open(MPI_COMM_WORLD, "test", MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
         MPI_File_write_at(fh, offset, buf, (4/world_size), MPI_INT, &status);
         MPI_File_close(&fh);
     }
