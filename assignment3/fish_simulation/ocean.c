@@ -380,17 +380,21 @@ int main (int argc, char** argv)
     /* TODO: This logger should be able to log to file with MPI-I/O */
     init_logger();
 
+    MPI_File fh;
     int rank, world_size;
     int source, dest, outbuf, i, j, k, tag=1, joining_nodes=4;
     int nbrs[4];
     int dims[2];
     int coords[2];
+    int l, offset;
     MPI_Request reqs[8], dummy_request;
     MPI_Status stats[8], dummy_status;
 
     /* Starting with MPI program*/
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    
     if (world_size == 4 || world_size == 9 || world_size == 16)
     {
         dims[0] = (int)sqrt((double)world_size);
@@ -440,6 +444,14 @@ int main (int argc, char** argv)
 
         sleep(1);
         running -= 1;
+        int buf[4];
+        for(l=0; l < 4; l++){
+            buf[l] = l
+        }
+        offset = rank*(4/world_size)*sizeof(int);
+        MPI_File_open(MPI_COMM_WORLD, 'test', MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
+        MPI_File_write_at(fhw, offset, buf, (4/size), MPI_INT, &status);
+        MPI_File_close(&fh);
     }
 
     free_custom_mpi_types();
