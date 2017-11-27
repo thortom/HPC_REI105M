@@ -451,21 +451,21 @@ int main (int argc, char** argv)
         /*Want to output after every step, For each node;  rank: any items and status (items = fish / boat) status (storm)*/
         for (int i = 0; i < MAX_NUMB_FISH; i++)
         {
-            if (!fish_data_equal(node->my_fish[i], FISH_NULL_DATA))
+            if (!fish_data_equal(node.my_fish[i], FISH_NULL_DATA))
             {
                 num_fish = num_fish+1;
             }
         }
-        if (!boat_data_equal(node->my_boat, BOAT_NULL_DATA)){
+        if (!boat_data_equal(node.my_boat, BOAT_NULL_DATA)){
             num_boats = 1;
         }
         char buff[200];
-        sprintf(buff, "Node %d: has %d fish groups, and %d boat(s).", node->rank, num_fish, num_boats);
+        sprintf(buff, "Node %d: has %d fish groups, and %d boat(s).", node.rank, num_fish, num_boats);
         int len = sizeof(buff)/sizeof(int);
 
         MPI_File_open(MPI_COMM_WORLD, "test", MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
         /*Use write_ordered(fh, buffer, count of stuff in buffer,  types, status)*/
-        MPI_File_write_ordered(fh, buf, len, MPI_CHAR, &status);
+        MPI_File_write_ordered(fh, buff, len, MPI_CHAR, &status);
         MPI_File_close(&fh);
     }
 
