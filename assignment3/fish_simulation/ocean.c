@@ -465,10 +465,11 @@ int main (int argc, char** argv)
 
         sleep(1);
         running -= 1;
-        int num_fish = 0;
+        /*MPI IO
+        Gets number of fishes and number of boats in this node. Inputs that data into a char buffer.
+        Sends that buffer to be written into binary file test using MPI IO*/
+        int num_fish = 0; 
         int num_boats = 0;
-        /*MPI IO*/
-        /*Want to output after every step, For each node;  rank: any items and status (items = fish / boat) status (storm)*/
         for (int i = 0; i < MAX_NUMB_FISH; i++)
         {
             if (!fish_data_equal(node.my_fish[i], FISH_NULL_DATA))
@@ -482,9 +483,7 @@ int main (int argc, char** argv)
         char buff[200];
         sprintf(buff, "Node %d: has %d fish groups, and %d boat(s).", node.rank, num_fish, num_boats);
         int len = sizeof(buff)/sizeof(int);
-
         MPI_File_open(MPI_COMM_WORLD, "test", MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
-        /*Use write_ordered(fh, buffer, count of stuff in buffer,  types, status)*/
         MPI_File_write_ordered(fh, buff, len, MPI_CHAR, &status);
         MPI_File_close(&fh);
     }
