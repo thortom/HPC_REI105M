@@ -165,6 +165,20 @@ void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data d
     MPI_Waitall(8, reqs, stats);
 }
 
+void filter_out_double_boat_transfer(Transmit_data data_out[], Transmit_data data_in[])
+{
+    int i, joining_nodes=4;
+    for (i = 0; i < joining_nodes; i++)
+    {
+        /* Sending and receiving to and from the same node */
+        if (data_out[i].numb_boats && data_in[i].numb_boats)
+        {
+            data_out[i].numb_boats = 0;
+            data_in[i].numb_boats = 0;
+        }
+    }
+}
+
 void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[], int nbrs[])
 {
     int source, dest, i, j, k, ok, tag=1, joining_nodes=4;
@@ -197,12 +211,17 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
 
         for (j = 0; j < data_in[i].numb_fish; j++)
         {
+            log_debug("Node [%d] will receive new fish from node [%d]", node->rank, source);
             MPI_Recv(&new_fish, 1, mpi_fish_data_type, source, tag, MPI_COMM_WORLD, &dummy_status);
+            log_debug("Node [%d] received new fish from node [%d]", node->rank, source);
 
-            /* TODO: This can fail when there are more than MAX_NUMB_FISH fish groups in the ocean */
             add_fish(node, new_fish);
         }
     }
+
+    /* If I am both transmitting boat to nodeA and receiving boat from nodeA
+        then I should NOT send my boat to nodeA and should NOT accept the boat from nodeA*/
+    filter_out_double_boat_transfer(data_out, data_in);
 
     /* Transfer the boats */
     for (i = 0; i < joining_nodes; i++)
@@ -212,8 +231,9 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
 
         if (data_out[i].numb_boats)
         {
+            log_debug("Node [%d] sent the new_boat to node [%d]", node->rank, dest);
             MPI_Send(&node->my_boat, 1, mpi_boat_data_type, dest, tag, MPI_COMM_WORLD);
-            log_debug("Node [%d] sent the new_boat", node->rank);
+            log_debug("Node [%d] received the OK signal", node->rank);
             MPI_Recv(&ok, 1, MPI_INT, source, tag, MPI_COMM_WORLD, &dummy_status);
             log_debug("Node [%d] received the OK signal", node->rank);
             /* ok is True if the boat did successfully transfer over */
@@ -426,7 +446,7 @@ int main (int argc, char** argv)
 
     Transmit_data data_out[joining_nodes];
     Transmit_data data_in[joining_nodes];
-    int running = 5;
+    int running = 10;
     while (running)
     {
         /* For each neighbor check for where the fish and boat are going */
