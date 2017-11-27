@@ -87,15 +87,15 @@ void update_status(Node *me)
     {
         update_boat_direction(&(me->my_boat), me->coords);
     }
-    int x = node->coords[0] + node->coords[1];
+    int x = me->coords[0] + me->coords[1];
     int k = 2*PI/1;
     int w = 2*PI/2;
     int t = MPI_Wtime() - START_TIME;
     if( sin(2*PI*((k*x) - (w*t))) > 0.9){
-        node->storm = 1;
+        me->storm = 1;
     }
     else{
-        node->storm = 0;
+        me->storm = 0;
     }
 }
 
