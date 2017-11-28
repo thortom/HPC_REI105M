@@ -59,7 +59,6 @@ void initialize_node_data(Node *me, int world_size)
     else if (world_size > 4 &&
              me->coords[0] == 0 && me->coords[1] == 1)
     {
-        /* TODO: Should this boat start from (0, 0) or is it OK here?*/
         boat_constructor(&me->my_boat, me->rank);
     }
     /* Assign fish to almost half of the cells */
@@ -80,7 +79,7 @@ void update_status(Node *me)
     {
         if (!fish_data_equal(me->my_fish[i], FISH_NULL_DATA))
         {
-            update_fish_direction(&(me->my_fish[i]));
+            update_fish_group(&(me->my_fish[i]));
         }
     }
     if (!boat_data_equal(me->my_boat, BOAT_NULL_DATA))
@@ -166,8 +165,6 @@ void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data d
         inbuffer[k] = 0;
     }
 
-    /*TODO: hafa forlykkju sem sendir uppl um hvort 'me' nóðan sé í storm ástandi
-    ef svo er */
     if(node->storm)
     {
         for(j = 0; j < joining_nodes; j++)
@@ -344,6 +341,34 @@ void do_action(Node *node)
     }
 }
 
+void log_to_file(&node)
+{
+    MPI_File fh;
+    MPI_Status status;
+
+    /*MPI IO
+    Gets number of fishes and number of boats in this node. Inputs that data into a char buffer.
+    Sends that buffer to be written into binary file using MPI-I/O*/
+    int num_fish = 0; 
+    int num_boats = 0;
+    for (int i = 0; i < MAX_NUMB_FISH; i++)
+    {
+        if (!fish_data_equal(node->my_fish[i], FISH_NULL_DATA))
+        {
+            num_fish = num_fish+1;
+        }
+    }
+    if (!boat_data_equal(node->my_boat, BOAT_NULL_DATA)){
+        num_boats = 1;
+    }
+    char buff[200];
+    sprintf(buff, "Node %d: has %d fish groups, and %d boat(s).\n", node->rank, num_fish, num_boats);
+    int len = sizeof(buff)/sizeof(int);
+    MPI_File_open(MPI_COMM_WORLD, "simulation.log", MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
+    MPI_File_write_ordered(fh, buff, len, MPI_CHAR, &status);
+    MPI_File_close(&fh);
+}
+
 void init_mpi_custom_types()
 {
     /* Create a MPI type for struct Fish_group */
@@ -447,10 +472,8 @@ void init_cartesian_grid(int *rank, int coords[], int nbrs[], int dims[])
 
 int main (int argc, char** argv)
 {
-    /* TODO: This logger should be able to log to file with MPI-I/O */
     init_logger();
 
-    MPI_File fh;
     int rank, world_size;
     int source, dest, outbuf, i, j, k, tag=1, joining_nodes=4;
     int nbrs[4];
@@ -459,7 +482,6 @@ int main (int argc, char** argv)
     int l, offset;
     MPI_Request reqs[8], dummy_request;
     MPI_Status stats[8], dummy_status;
-    MPI_Status status;
 
     /* Starting with MPI program*/
     MPI_Init(&argc, &argv);
@@ -515,27 +537,8 @@ int main (int argc, char** argv)
 
         sleep(1);
         running -= 1;
-        /*MPI IO
-        Gets number of fishes and number of boats in this node. Inputs that data into a char buffer.
-        Sends that buffer to be written into binary file test using MPI IO*/
-        int num_fish = 0; 
-        int num_boats = 0;
-        for (int i = 0; i < MAX_NUMB_FISH; i++)
-        {
-            if (!fish_data_equal(node.my_fish[i], FISH_NULL_DATA))
-            {
-                num_fish = num_fish+1;
-            }
-        }
-        if (!boat_data_equal(node.my_boat, BOAT_NULL_DATA)){
-            num_boats = 1;
-        }
-        char buff[200];
-        sprintf(buff, "Node %d: has %d fish groups, and %d boat(s).\n", node.rank, num_fish, num_boats);
-        int len = sizeof(buff)/sizeof(int);
-        MPI_File_open(MPI_COMM_WORLD, "test", MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
-        MPI_File_write_ordered(fh, buff, len, MPI_CHAR, &status);
-        MPI_File_close(&fh);
+
+        log_to_file(&node);
     }
 
     free_custom_mpi_types();

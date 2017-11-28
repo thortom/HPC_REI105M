@@ -13,8 +13,11 @@ void print_fish_group(Fish_group *me)
     log_info("Fish group number: %d, contains: %d fish", me->group_number, me->numb_fish);
 }
 
-void update_fish_direction(Fish_group *me)
+void update_fish_group(Fish_group *me)
 {
+    /* Inrease the fish population by one or none */
+    me->numb_fish += rand() % 2;
+
     /* Up, Down, Left, Right */
     me->direction = rand() % 4;
     log_debug("Fish group: %d heading: %s",

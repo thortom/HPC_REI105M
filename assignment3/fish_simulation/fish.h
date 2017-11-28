@@ -14,7 +14,7 @@ typedef struct fish_group_identity {
 
 void fish_group_constructor(Fish_group *me, int group_number);
 void print_fish_group(Fish_group *me);
-void update_fish_direction(Fish_group *me);
+void update_fish_group(Fish_group *me);
 int fish_data_equal(Fish_group data_1, Fish_group data_2);
 
 #endif
