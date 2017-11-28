@@ -195,7 +195,7 @@ void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data d
         }
         else
         {
-            log_debug("Node [%d] is not sending data to node in direction %d because it has a storm", node->rank, get_direction_string(nbrs[i]));
+            log_debug("Node [%d] is not sending data to node [%d] because there is storm", node->rank, nbrs[i]);
         }
 
         dest = nbrs[i];
@@ -240,7 +240,7 @@ void transfer_data(Node *node, Transmit_data data_out[], Transmit_data data_in[]
     {
         /* log_debug("Node [%d] data_in: fish=%d, boats=%d, from=%d", node->rank, data_in[i].numb_fish,
                                     data_in[i].numb_boats, data_in[i].from_rank); */
-        
+            
         dest = nbrs[i];
         source = nbrs[i];
         
@@ -341,7 +341,7 @@ void do_action(Node *node)
     }
 }
 
-void log_to_file(&node)
+void log_to_file(Node *node)
 {
     MPI_File fh;
     MPI_Status status;
