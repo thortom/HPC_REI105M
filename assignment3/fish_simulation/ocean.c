@@ -156,27 +156,59 @@ void log_node_info(Node *node)
 
 void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data data_in[], int nbrs[])
 {
-    int source, dest, i, tag=1, joining_nodes=4;
-    MPI_Request reqs[8];
-    MPI_Status stats[8];
+    int source, dest, i,j,k, tag=1, joining_nodes=4;
+    MPI_Request reqs1[8], reqs2[8];
+    MPI_Status stats1[8], stats2[8];
+    int outbuffer[4], inbuffer[4];
+    for(k = 0; k < joining_nodes; k++)
+    {
+        outbuffer[k] = 0;
+        inbuffer[k] = 0;
+    }
 
+    /*TODO: hafa forlykkju sem sendir uppl um hvort 'me' nóðan sé í storm ástandi
+    ef svo er */
+    if(me->storm)
+    {
+        for(j = 0; j < joining_nodes; j++)
+        {
+            outbuffer[j] = 1;
+        }
+    }
+    for(k = 0; k < joining_nodes; k++)
+    {
+        dest = nbrs[k];
+        source = nbrs[k];
+        /*Sending out int:  1 if I have storm, 0 if I dont have storm*/
+        MPI_Isend(&outbuffer[k], 1, MPI_INT, dest, tag, MPI_COMM_WORLD, &reqs1[k]);
+        /*Getting info from neighbours if they have a storm.*/
+        MPI_Irecv(&inbuffer[k], 1, MPI_INT, source, tag, MPI_COMM_WORLD, &reqs1[k+joining_nodes]);
+    }
+    
+    /* Wait forgiven MPI Requests to complete */
+    MPI_Waitall(8, reqs1, stats1);
+    
     for(i = 0; i < joining_nodes; i++)
     {
         data_out[i] = TRANSMIT_NULL_DATA;
-        get_number_of_items_to_transmit(node, &data_out[i], i);
+        /*sets the info for what goes where*/
+        if(inbuffer[i] == 0) /*If there is no storm for this node.*/
+        {
+            get_number_of_items_to_transmit(node, &data_out[i], i); /*Then we get what to transmit there.*/
+        }
 
         dest = nbrs[i];
         source = nbrs[i];
 
-        MPI_Isend(&data_out[i], 1, mpi_transmit_data_type, dest, tag, MPI_COMM_WORLD, &reqs[i]);
+        MPI_Isend(&data_out[i], 1, mpi_transmit_data_type, dest, tag, MPI_COMM_WORLD, &reqs2[i]);
         /* log_debug("Node rank: %d will transmit %d fish groups and %d boats, to %d",
                                 node->rank, data_out[i].numb_fish, data_out[i].numb_boats, dest); */
         data_in[i] = TRANSMIT_NULL_DATA;
-        MPI_Irecv(&data_in[i], 1, mpi_transmit_data_type, source, tag, MPI_COMM_WORLD, &reqs[i + joining_nodes]);
+        MPI_Irecv(&data_in[i], 1, mpi_transmit_data_type, source, tag, MPI_COMM_WORLD, &reqs2[i + joining_nodes]);
     }
 
     /* Wait forgiven MPI Requests to complete */
-    MPI_Waitall(8, reqs, stats);
+    MPI_Waitall(8, reqs2, stats2);
 }
 
 void filter_out_double_boat_transfer(Transmit_data data_out[], Transmit_data data_in[])
