@@ -168,7 +168,7 @@ void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data d
 
     /*TODO: hafa forlykkju sem sendir uppl um hvort 'me' nóðan sé í storm ástandi
     ef svo er */
-    if(me->storm)
+    if(node->storm)
     {
         for(j = 0; j < joining_nodes; j++)
         {
@@ -187,13 +187,14 @@ void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data d
     
     /* Wait forgiven MPI Requests to complete */
     MPI_Waitall(8, reqs1, stats1);
-    
+
     for(i = 0; i < joining_nodes; i++)
     {
         data_out[i] = TRANSMIT_NULL_DATA;
         /*sets the info for what goes where*/
         if(inbuffer[i] == 0) /*If there is no storm for this node.*/
         {
+            log_debug("Node [%d] is not sending data to node in direction %d because it has a storm", node->rank, nbrs[i]);
             get_number_of_items_to_transmit(node, &data_out[i], i); /*Then we get what to transmit there.*/
         }
 
