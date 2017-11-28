@@ -91,7 +91,7 @@ void update_status(Node *me)
     double k = 2*PI/1;
     double w = 2*PI/2;
     double t = MPI_Wtime() - START_TIME;
-    if( sin((double)(2*PI*((k*x) - (w*t)))) > 0.8){
+    if( sin((double)(2*PI*((k*x) - (w*t)))) > 0.9){
         me->storm = 1;
         log_debug("Node [%d]: has a storm", me->rank);
     }
@@ -194,8 +194,11 @@ void collect_transmit_info(Node *node, Transmit_data data_out[], Transmit_data d
         /*sets the info for what goes where*/
         if(inbuffer[i] == 0) /*If there is no storm for this node.*/
         {
-            log_debug("Node [%d] is not sending data to node in direction %d because it has a storm", node->rank, nbrs[i]);
             get_number_of_items_to_transmit(node, &data_out[i], i); /*Then we get what to transmit there.*/
+        }
+        else
+        {
+            log_debug("Node [%d] is not sending data to node in direction %d because it has a storm", node->rank, get_direction_string(nbrs[i]));
         }
 
         dest = nbrs[i];
